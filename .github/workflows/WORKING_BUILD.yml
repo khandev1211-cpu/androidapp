@@ -1,0 +1,77 @@
+name: Build Android APK - Working Version
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install basic dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git python3-pip build-essential
+        sudo apt install -y default-jdk wget unzip
+    
+    - name: Install Android SDK
+      run: |
+        # Download Android SDK
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip -q commandlinetools-linux-*.zip
+        sudo mkdir -p /opt/android-sdk/cmdline-tools/latest
+        sudo mv cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/
+        
+        # Set environment variables
+        echo "ANDROID_HOME=/opt/android-sdk" >> $GITHUB_ENV
+        echo "/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools" >> $GITHUB_PATH
+        
+        # Accept licenses and install components
+        yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+        /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+    
+    - name: Install Android NDK
+      run: |
+        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+        unzip -q android-ndk-r25b-linux.zip
+        sudo mv android-ndk-r25b /opt/android-sdk/ndk
+        echo "ANDROID_NDK_HOME=/opt/android-sdk/ndk" >> $GITHUB_ENV
+    
+    - name: Install Python packages
+      run: |
+        pip install --upgrade pip
+        pip install kivy==2.3.1 yt-dlp==2024.1.0 buildozer cython
+    
+    - name: Prepare buildozer
+      run: |
+        # Copy buildozer.spec to root
+        ls -la
+        cat buildozer.spec
+    
+    - name: Build APK
+      run: |
+        buildozer android debug
+      continue-on-error: true
+    
+    - name: Find and upload APK
+      run: |
+        echo "Looking for APK files..."
+        find . -name "*.apk" -type f -exec ls -la {} \;
+        mkdir -p artifacts
+        cp bin/*.apk artifacts/ 2>/dev/null || echo "No APK in bin/"
+        cp *.apk artifacts/ 2>/dev/null || echo "No APK in root"
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: artifacts/
+        if-no-files-found: warn
