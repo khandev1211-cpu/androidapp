@@ -16,35 +16,39 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install Android dependencies
+    - name: Install system dependencies
       run: |
         sudo apt update
         sudo apt install -y git python3-pip build-essential
         sudo apt install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev
         sudo apt install -y libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev
-        sudo apt install -y zlib1g-dev libssl-dev default-jdk
+        sudo apt install -y zlib1g-dev libssl-dev default-jdk wget unzip
     
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v2
-      with:
-        api-level: 33
-        ndk: 25b
-    
-    - name: Configure environment
+    - name: Install Android SDK manually
       run: |
-        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
-        echo "$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-*.zip
+        mkdir -p $HOME/android-sdk/cmdline-tools/latest
+        mv cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/ 2>/dev/null || true
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+    
+    - name: Install Android components
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+    
+    - name: Install Android NDK
+      run: |
+        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+        unzip -q android-ndk-r25b-linux.zip
+        mv android-ndk-r25b $HOME/android-sdk/ndk
+        echo "ANDROID_NDK_HOME=$HOME/android-sdk/ndk" >> $GITHUB_ENV
     
     - name: Install Python packages
       run: |
         pip install --upgrade pip
         pip install kivy==2.3.1 yt-dlp==2024.1.0 buildozer cython
-    
-    - name: Initialize buildozer
-      run: |
-        buildozer init
-        buildozer android deploy
     
     - name: Build APK
       run: |
